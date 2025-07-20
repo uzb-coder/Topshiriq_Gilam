@@ -1,7 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'Controller/api_service.dart';
 import 'Drawers.dart';
-import '../Model/Admin.dart';
-import '../Servis/api_service.dart';
+import '../Model/Admin_Model.dart';
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -10,25 +13,29 @@ class AdminScreen extends StatefulWidget {
   State<AdminScreen> createState() => _AdminScreenState();
 }
 
-class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStateMixin {
+class _AdminScreenState extends State<AdminScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
   final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _surnameController = TextEditingController();
-  final TextEditingController _loginController = TextEditingController();
+  final TextEditingController _lastNameController = TextEditingController();
+  final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _roleController = TextEditingController();
 
-  bool _buyurtmaQabuli = false;
-  bool _adminlar = false;
-  bool _servislar = false;
-  bool _yangiBuyurtmalar = false;
-  bool _tayyorBuyurtmalar = false;
-  bool _harajatlar = false;
-  bool _sozlamalar = false;
+  Map<String, bool> _permissions = {
+    ' Buyurtma qabuli': false,
+    'Adminlar': false,
+    'Servislar': false,
+    'Yangi buyurtmalar': false,
+    'Tayyor buyurtmalar': false,
+    'Harajatlar': false,
+    'Sozlamalar': false,
+  };
 
   List<Admin> adminList = [];
   bool _loading = true;
+  bool _addingAdmin = false; // Yangi admin qo'shish jarayoni
   String? _error;
 
   @override
@@ -62,9 +69,16 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     return RichText(
       text: TextSpan(
         text: text,
-        style: const TextStyle(color: Colors.black, fontSize: 16.0, fontWeight: FontWeight.w500),
+        style: const TextStyle(
+          color: Colors.black,
+          fontSize: 16.0,
+          fontWeight: FontWeight.w500,
+        ),
         children: const [
-          TextSpan(text: ' *', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          TextSpan(
+            text: ' *',
+            style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+          ),
         ],
       ),
     );
@@ -93,53 +107,13 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
             focusedBorder: const OutlineInputBorder(
               borderSide: BorderSide(color: Colors.blue),
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16.0,
+              vertical: 12.0,
+            ),
           ),
         ),
         const SizedBox(height: 16.0),
-      ],
-    );
-  }
-
-  Widget _buildPermissionsCheckboxRow(
-      String title, {
-        required bool value1,
-        required ValueChanged<bool?> onChanged1,
-        String? title2,
-        bool? value2,
-        ValueChanged<bool?>? onChanged2,
-        String? title3,
-        bool? value3,
-        ValueChanged<bool?>? onChanged3,
-      }) {
-    return Row(
-      children: [
-        Expanded(
-          child: Row(
-            children: [
-              Checkbox(value: value1, onChanged: onChanged1, activeColor: Colors.blue),
-              Text(title),
-            ],
-          ),
-        ),
-        if (title2 != null && value2 != null && onChanged2 != null)
-          Expanded(
-            child: Row(
-              children: [
-                Checkbox(value: value2, onChanged: onChanged2, activeColor: Colors.blue),
-                Text(title2),
-              ],
-            ),
-          ),
-        if (title3 != null && value3 != null && onChanged3 != null)
-          Expanded(
-            child: Row(
-              children: [
-                Checkbox(value: value3, onChanged: onChanged3, activeColor: Colors.blue),
-                Text(title3),
-              ],
-            ),
-          ),
       ],
     );
   }
@@ -167,15 +141,13 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
           _buildInfoRow('Ism:', admin.firstName),
           _buildInfoRow('Familiya:', admin.lastName),
           _buildInfoRow('Login:', admin.login),
-          _buildInfoRow('Parol:', '******'),
           const SizedBox(height: 16.0),
           Row(
             children: [
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: () {
-                    print('Yangilash bosildi: ${admin.firstName}');
-                    // Yangilash uchun API chaqiruvi qo'shish mumkin
+                    print('Yangilash bosildi: ${admin.login}');
                   },
                   icon: const Icon(Icons.edit, size: 18),
                   label: const Text('Yangilash'),
@@ -183,7 +155,9 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                     backgroundColor: Colors.blue,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
+                    ),
                   ),
                 ),
               ),
@@ -191,12 +165,25 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: () async {
-                    // Adminni o'chirishni API orqali qilish mumkin
-                    // Misol uchun:
-                    // await ApiService.deleteAdmin(admin.id);
-                    setState(() {
-                      adminList.remove(admin);
-                    });
+                    try {
+                      await ApiService.deleteAdmin(admin.id);
+                      setState(() {
+                        adminList.remove(admin);
+                      });
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Admin o\'chirildi'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Xatolik: $e'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
                   },
                   icon: const Icon(Icons.delete, size: 18),
                   label: const Text('O\'chirish'),
@@ -204,7 +191,9 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                     backgroundColor: Colors.red.shade400,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
+                    ),
                   ),
                 ),
               ),
@@ -225,7 +214,10 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
           children: [
             TextSpan(
               text: ' $value',
-              style: const TextStyle(fontWeight: FontWeight.normal, fontSize: 16),
+              style: const TextStyle(
+                fontWeight: FontWeight.normal,
+                fontSize: 16,
+              ),
             ),
           ],
         ),
@@ -234,63 +226,84 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   }
 
   Future<void> _addAdmin() async {
-    final String ism = _nameController.text.trim();
-    final String familiya = _surnameController.text.trim();
-    final String login = _loginController.text.trim();
-    final String parol = _passwordController.text.trim();
-    final String role = _roleController.text.trim();
+    // Inputlarni tekshirish
+    final name = _nameController.text.trim();
+    final lastName = _lastNameController.text.trim();
+    final username = _usernameController.text.trim();
+    final password = _passwordController.text.trim();
 
-    if (ism.isEmpty || familiya.isEmpty || login.isEmpty || parol.isEmpty) {
+    final selectedPermissions = _permissions.entries
+        .where((entry) => entry.value)
+        .map((entry) => entry.key)
+        .toList();
+
+    if (name.isEmpty ||
+        lastName.isEmpty ||
+        username.isEmpty ||
+        password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('❌ Barcha majburiy maydonlarni to‘ldiring!'), backgroundColor: Colors.red),
+        const SnackBar(
+          content: Text('❌ Barcha maydonlarni to\'ldiring'),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
 
+    setState(() {
+      _addingAdmin = true;
+    });
+
     try {
-      // API orqali yangi admin qo'shish
-      // Misol uchun:
-      final newAdmin = await ApiService.createAdmin(
-        firstName: ism,
-        lastName: familiya,
-        login: login,
-        password: parol,
-        role: role,
-        permissions: {
-          'buyurtmaQabuli': _buyurtmaQabuli,
-          'adminlar': _adminlar,
-          'servislar': _servislar,
-          'yangiBuyurtmalar': _yangiBuyurtmalar,
-          'tayyorBuyurtmalar': _tayyorBuyurtmalar,
-          'harajatlar': _harajatlar,
-          'sozlamalar': _sozlamalar,
-        },
+      // Admin qo'shish uchun API chaqiruvi
+      final adminData = {
+        'firstName': name,
+        'lastName': lastName,
+        'login': username,
+        'password': password,
+        'permissions': selectedPermissions, // <-- YANGI QATOR
+      };
+
+      // ApiService metodining to'g'ri nomini ishlatish
+      final result = await ApiService.addAdmin(
+        name,
+        lastName,
+        username,
+        password,
+        selectedPermissions,
       );
 
-      setState(() {
-        adminList.add(newAdmin);
-        _nameController.clear();
-        _surnameController.clear();
-        _loginController.clear();
-        _passwordController.clear();
-        _roleController.clear();
-        _buyurtmaQabuli = false;
-        _adminlar = false;
-        _servislar = false;
-        _yangiBuyurtmalar = false;
-        _tayyorBuyurtmalar = false;
-        _harajatlar = false;
-        _sozlamalar = false;
-        _tabController.index = 0;
-      });
-
+      // Muvaffaqiyatli qo'shildi
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('✅ Yangi admin qo‘shildi!'), backgroundColor: Colors.green),
+        const SnackBar(
+          content: Text('✅ Admin muvaffaqiyatli qo\'shildi'),
+          backgroundColor: Colors.green,
+        ),
       );
+
+      // Inputlarni tozalash
+      _nameController.clear();
+      _lastNameController.clear();
+      _usernameController.clear();
+      _passwordController.clear();
+
+      // Adminlar ro'yxatini yangilash
+      await _fetchAdmins();
+
+      // Birinchi tabga o'tish (adminlar ro'yxati)
+      _tabController.animateTo(0);
     } catch (e) {
+      print("❌ Xatolik: $e");
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('❌ Xatolik yuz berdi: $e'), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text("❌ Xatolik: ${e.toString()}"),
+          backgroundColor: Colors.red,
+        ),
       );
+    } finally {
+      setState(() {
+        _addingAdmin = false;
+      });
     }
   }
 
@@ -298,10 +311,9 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   void dispose() {
     _tabController.dispose();
     _nameController.dispose();
-    _surnameController.dispose();
-    _loginController.dispose();
+    _lastNameController.dispose();
+    _usernameController.dispose();
     _passwordController.dispose();
-    _roleController.dispose();
     super.dispose();
   }
 
@@ -334,78 +346,309 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       body: TabBarView(
         controller: _tabController,
         children: [
+          // Adminlar ro'yxatini ko'rsatadigan widget
           _loading
               ? const Center(child: CircularProgressIndicator())
               : _error != null
               ? Center(
-            child: Text(
-              '❌ Xatolik: $_error',
-              style: const TextStyle(color: Colors.red),
-            ),
-          )
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      '❌ Xatolik: $_error',
+                      style: const TextStyle(color: Colors.red),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: _fetchAdmins,
+                      child: const Text('Qayta urinish'),
+                    ),
+                  ],
+                ),
+              )
+              : adminList.isEmpty
+              ? const Center(
+                child: Text(
+                  'Adminlar topilmadi',
+                  style: TextStyle(fontSize: 18),
+                ),
+              )
               : ListView.builder(
-            itemCount: adminList.length,
-            itemBuilder: (context, index) {
-              return _buildAdminCard(adminList[index]);
-            },
-          ),
+                itemCount: adminList.length,
+                itemBuilder: (context, index) {
+                  final admin = adminList[index];
+                  return Container(
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: 16.0,
+                      vertical: 8.0,
+                    ),
+                    padding: const EdgeInsets.all(16.0),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8.0),
+                      border: Border.all(
+                        color: Colors.blue.shade100,
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.1),
+                          spreadRadius: 1,
+                          blurRadius: 3,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Ism
+                        Text.rich(
+                          TextSpan(
+                            children: [
+                              const TextSpan(
+                                text: 'Ism: ',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              TextSpan(
+                                text: admin.firstName,
+                                style: const TextStyle(fontSize: 16),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 4),
+                        // Familiya
+                        Text.rich(
+                          TextSpan(
+                            children: [
+                              const TextSpan(
+                                text: 'Familya: ',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              TextSpan(
+                                text: admin.lastName,
+                                style: const TextStyle(fontSize: 16),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 4),
+                        // Login
+                        Text.rich(
+                          TextSpan(
+                            children: [
+                              const TextSpan(
+                                text: 'Login: ',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              TextSpan(
+                                text: admin.login,
+                                style: const TextStyle(fontSize: 16),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        // Parol (yashirin)
+                        const Text(
+                          'Parol: *********',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // Tugmalar: Yangilash va O'chirish
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  // Yangilash funksiyasi shu yerda bo'ladi
+                                  print('Yangilash bosildi: ${admin.login}');
+                                },
+                                icon: const Icon(Icons.edit, size: 18),
+                                label: const Text('Yangilash'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.blue,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 10,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () async {
+                                  try {
+                                    print(
+                                      '🔁 O‘chirish boshlandi: ID = ${admin.id}',
+                                    );
+                                    await ApiService.deleteAdmin(
+                                      admin.id,
+                                    ); // ID asosida o‘chirish
+
+                                    setState(() {
+                                      adminList.removeAt(
+                                        index,
+                                      ); // UI ro‘yxatdan o‘chirish
+                                    });
+
+                                    print('✅ Admin muvaffaqiyatli o‘chirildi.');
+
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text("✅ Admin o‘chirildi"),
+                                        backgroundColor: Colors.green,
+                                      ),
+                                    );
+                                  } catch (e) {
+                                    print(
+                                      '❌ O‘chirishda xatolik: $e',
+                                    ); // <-- Konsolga chiqarish
+
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('❌ Xatolik: $e'),
+                                        backgroundColor: Colors.red,
+                                      ),
+                                    );
+                                  }
+                                },
+                                icon: const Icon(Icons.delete, size: 18),
+                                label: const Text("O‘chirish"),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red.shade400,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 10,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+
+          // Admin qo'shish formi
           SingleChildScrollView(
             padding: const EdgeInsets.all(16.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildTextField(label: 'Ism', hintText: 'Ismni kiriting', controller: _nameController),
-                _buildTextField(label: 'Familiya', hintText: 'Familiyani kiriting', controller: _surnameController),
-                _buildTextField(label: 'Login', hintText: 'Loginni kiriting', controller: _loginController),
-                _buildTextField(label: 'Parol', hintText: 'Parolni kiriting', controller: _passwordController, obscureText: true),
-                _buildTextField(label: 'Lavozim (Role)', hintText: 'Masalan: Super Admin yoki Operator', controller: _roleController),
+                _buildTextField(
+                  label: 'Ism',
+                  hintText: 'Ism kiriting',
+                  controller: _nameController,
+                ),
+                _buildTextField(
+                  label: 'Familiya',
+                  hintText: 'Familiya kiriting',
+                  controller: _lastNameController,
+                ),
+                _buildTextField(
+                  label: 'Login',
+                  hintText: 'Login kiriting',
+                  controller: _usernameController,
+                ),
+                _buildTextField(
+                  label: 'Parol',
+                  hintText: 'Parol kiriting',
+                  controller: _passwordController,
+                  obscureText: true,
+                ),
+                _buildTextField(
+                  label: 'Lavozim (Role)',
+                  hintText: 'Masalan super Admin yoki Operator',
+                  controller: _roleController,
+                  obscureText: false,
+                ),
+                Text(
+                  "Ruxsatlar:",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                Wrap(
+                  spacing: 16, // gorizontal oraliq
+                  runSpacing: 8, // vertikal oraliq
+                  children: _permissions.entries.map((entry) {
+                    return SizedBox(
+                      width: MediaQuery.of(context).size.width / 2 - 24, // ekran bo'yicha 2ga bo'linadi
+                      child: CheckboxListTile(
+                        title: Text(entry.key),
+                        value: entry.value,
+                        onChanged: (bool? newValue) {
+                          setState(() {
+                            _permissions[entry.key] = newValue ?? false;
+                          });
+                        },
+                        controlAffinity: ListTileControlAffinity.leading,
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 16),
 
-                _buildRequiredLabel('Ruxsatlar'),
-                const SizedBox(height: 8.0),
-                _buildPermissionsCheckboxRow(
-                  'Buyurtma qabuli',
-                  value1: _buyurtmaQabuli,
-                  onChanged1: (val) => setState(() => _buyurtmaQabuli = val ?? false),
-                  title2: 'Adminlar',
-                  value2: _adminlar,
-                  onChanged2: (val) => setState(() => _adminlar = val ?? false),
-                ),
-                _buildPermissionsCheckboxRow(
-                  'Servislar',
-                  value1: _servislar,
-                  onChanged1: (val) => setState(() => _servislar = val ?? false),
-                  title2: 'Yangi buyurtmalar',
-                  value2: _yangiBuyurtmalar,
-                  onChanged2: (val) => setState(() => _yangiBuyurtmalar = val ?? false),
-                ),
-                _buildPermissionsCheckboxRow(
-                  'Tayyor buyurtmalar',
-                  value1: _tayyorBuyurtmalar,
-                  onChanged1: (val) => setState(() => _tayyorBuyurtmalar = val ?? false),
-                  title2: 'Harajatlar',
-                  value2: _harajatlar,
-                  onChanged2: (val) => setState(() => _harajatlar = val ?? false),
-                ),
-                _buildPermissionsCheckboxRow(
-                  'Sozlamalar',
-                  value1: _sozlamalar,
-                  onChanged1: (val) => setState(() => _sozlamalar = val ?? false),
-                ),
-                const SizedBox(height: 24.0),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48.0,
-                  child: ElevatedButton(
-                    onPressed: _addAdmin,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4.0)),
-                      elevation: 2,
+
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: _addingAdmin ? null : _addAdmin,
+                      icon: _addingAdmin
+                          ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                          : const Icon(Icons.add),
+                      label: Text(
+                        _addingAdmin ? 'Qo\'shilmoqda...' : 'Admin Qo\'shish',
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 32,
+                          vertical: 12,
+                        ),
+                      ),
                     ),
-                    child: const Text('Admin qo\'shish', style: TextStyle(fontSize: 18.0)),
-                  ),
+                    // Agar kerak bo‘lsa boshqa widgetlar qo‘shish mumkin
+                  ],
                 ),
+
               ],
             ),
           ),

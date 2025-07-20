@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../Model/ServiceModel.dart';
+import '../Controller/api_service.dart';
 import 'Drawers.dart';
 
 class ServiceListScreen extends StatefulWidget {
@@ -8,14 +10,10 @@ class ServiceListScreen extends StatefulWidget {
   State<ServiceListScreen> createState() => _ServiceListScreenState();
 }
 
-class _ServiceListScreenState extends State<ServiceListScreen> with SingleTickerProviderStateMixin {
+class _ServiceListScreenState extends State<ServiceListScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
-
-  final List<Map<String, String>> services = [
-    {'Nomi': 'adyolkatta', 'Narxi': '10000 so\'m', 'Birlik': 'kv', 'Tavsifi': ''},
-    {'Nomi': 'Gilam', 'Narxi': '10000 so\'m', 'Birlik': 'kv', 'Tavsifi': ''},
-    {'Nomi': 'Parda', 'Narxi': '25000 so\'m', 'Birlik': 'kg', 'Tavsifi': ''},
-  ];
+  late Future<List<Services>> _servicesFuture;
 
   final _formKey = GlobalKey<FormState>();
   final _nomiController = TextEditingController();
@@ -27,35 +25,37 @@ class _ServiceListScreenState extends State<ServiceListScreen> with SingleTicker
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _loadServices();
   }
 
-  @override
-  void dispose() {
-    _tabController.dispose();
-    _nomiController.dispose();
-    _narxiController.dispose();
-    _birlikController.dispose();
-    _tavsifiController.dispose();
-    super.dispose();
+  void _loadServices() {
+    setState(() {
+      _servicesFuture = ApiService.getAllServices();
+    });
   }
 
-  void _addService() {
+  void _addService() async {
     if (_formKey.currentState!.validate()) {
-      setState(() {
-        services.add({
-          'Nomi': _nomiController.text,
-          'Narxi': _narxiController.text,
-          'Birlik': _birlikController.text,
-          'Tavsifi': _tavsifiController.text,
-        });
+      final newService = {
+        "title": _nomiController.text,
+        "price": int.tryParse(_narxiController.text) ?? 0,
+        "unit": _birlikController.text,
+        "description": _tavsifiController.text,
+      };
 
+      final response = await ApiService.createService(newService);
+      if (response.statusCode == 200 || response.statusCode == 201) {
         _nomiController.clear();
         _narxiController.clear();
         _birlikController.clear();
         _tavsifiController.clear();
-
+        _loadServices();
         _tabController.animateTo(0);
-      });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ Xizmatni qo‘shishda xatolik: ${response.body}')),
+        );
+      }
     }
   }
 
@@ -63,9 +63,12 @@ class _ServiceListScreenState extends State<ServiceListScreen> with SingleTicker
     return RichText(
       text: TextSpan(
         text: label,
-        style: const TextStyle(color: Colors.black, fontSize: 14.0, fontWeight: FontWeight.w500),
+        style: const TextStyle(
+            color: Colors.black, fontSize: 14.0, fontWeight: FontWeight.w500),
         children: const [
-          TextSpan(text: ' *', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          TextSpan(
+              text: ' *',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
         ],
       ),
     );
@@ -78,7 +81,8 @@ class _ServiceListScreenState extends State<ServiceListScreen> with SingleTicker
       appBar: AppBar(
         backgroundColor: Colors.blue,
         elevation: 0,
-        title: const Text("Xizmatlar", style: TextStyle(color: Colors.white)),
+        title:
+        const Text("Xizmatlar", style: TextStyle(color: Colors.white)),
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: Colors.white,
@@ -94,29 +98,45 @@ class _ServiceListScreenState extends State<ServiceListScreen> with SingleTicker
         controller: _tabController,
         children: [
           // 1. Ro'yxat
-          SingleChildScrollView(
-            scrollDirection: Axis.vertical,
-            child: DataTable(
-              columnSpacing: 24.0,
-              headingRowColor: MaterialStateProperty.resolveWith((states) => Colors.grey[200]),
-              columns: const [
-                DataColumn(label: Text('Nomi')),
-                DataColumn(label: Text('Narxi')),
-                DataColumn(label: Text('Birlik')),
-                DataColumn(label: Text('Tavsifi')),
-              ],
-              rows: services.map((service) {
-                return DataRow(cells: [
-                  DataCell(Text(service['Nomi']!)),
-                  DataCell(Text(service['Narxi']!)),
-                  DataCell(Text(service['Birlik']!)),
-                  DataCell(Text(service['Tavsifi']!)),
-                ]);
-              }).toList(),
-            ),
+          FutureBuilder<List<Services>>(
+            future: _servicesFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              } else if (snapshot.hasError) {
+                return Center(
+                    child: Text("❌ Xatolik: ${snapshot.error.toString()}"));
+              } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return const Center(child: Text("Hech qanday xizmat topilmadi"));
+              }
+
+              final services = snapshot.data!;
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  columnSpacing: 24.0,
+                  headingRowColor: MaterialStateProperty.resolveWith(
+                          (states) => Colors.grey[200]),
+                  columns: const [
+                    DataColumn(label: Text('Nomi')),
+                    DataColumn(label: Text('Narxi')),
+                    DataColumn(label: Text('Birlik')),
+                    DataColumn(label: Text('Tavsifi')),
+                  ],
+                  rows: services.map((service) {
+                    return DataRow(cells: [
+                      DataCell(Text(service.name)),
+                      DataCell(Text('${service.price} so\'m')),
+                      DataCell(Text(service.unit)),
+                      DataCell(Text(service.description)),
+                    ]);
+                  }).toList(),
+                ),
+              );
+            },
           ),
 
-          // 2. Yangi qo'shish formasi
+          // 2. Qo‘shish formasi
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Form(
@@ -131,7 +151,9 @@ class _ServiceListScreenState extends State<ServiceListScreen> with SingleTicker
                       hintText: 'Masalan: Gilam',
                       border: OutlineInputBorder(),
                     ),
-                    validator: (value) => value == null || value.isEmpty ? 'Xizmat nomini kiriting' : null,
+                    validator: (value) => value == null || value.isEmpty
+                        ? 'Xizmat nomini kiriting'
+                        : null,
                   ),
                   const SizedBox(height: 16),
                   _buildRequiredLabel('O\'lchov birligi'),
@@ -139,10 +161,12 @@ class _ServiceListScreenState extends State<ServiceListScreen> with SingleTicker
                   TextFormField(
                     controller: _birlikController,
                     decoration: const InputDecoration(
-                      hintText: 'Birlikni tanlang',
+                      hintText: 'kv / kg',
                       border: OutlineInputBorder(),
                     ),
-                    validator: (value) => value == null || value.isEmpty ? 'O\'lchov birligini kiriting' : null,
+                    validator: (value) => value == null || value.isEmpty
+                        ? 'O\'lchov birligini kiriting'
+                        : null,
                   ),
                   const SizedBox(height: 16),
                   _buildRequiredLabel('Narxi (so\'m)'),
@@ -154,7 +178,9 @@ class _ServiceListScreenState extends State<ServiceListScreen> with SingleTicker
                       border: OutlineInputBorder(),
                     ),
                     keyboardType: TextInputType.number,
-                    validator: (value) => value == null || value.isEmpty ? 'Narxni kiriting' : null,
+                    validator: (value) => value == null || value.isEmpty
+                        ? 'Narxni kiriting'
+                        : null,
                   ),
                   const SizedBox(height: 16),
                   const Text('Tavsifi'),
@@ -162,7 +188,7 @@ class _ServiceListScreenState extends State<ServiceListScreen> with SingleTicker
                   TextFormField(
                     controller: _tavsifiController,
                     decoration: const InputDecoration(
-                      hintText: 'Qo‘shimcha ma\'lumot...(majburiy emas)',
+                      hintText: 'Qo‘shimcha ma\'lumot (ixtiyoriy)',
                       border: OutlineInputBorder(),
                     ),
                     maxLines: 3,
@@ -176,7 +202,8 @@ class _ServiceListScreenState extends State<ServiceListScreen> with SingleTicker
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue,
                         foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6)),
                       ),
                       child: const Text('Saqlash'),
                     ),

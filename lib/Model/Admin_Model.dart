@@ -3,7 +3,7 @@ class Admin {
   final String firstName;
   final String lastName;
   final String login;
-  final String password; // Parol odatda backendda shifrlangan bo‘ladi, UI da ko‘rsatish tavsiya etilmaydi
+  final String password;
 
   Admin({
     required this.id,
@@ -15,11 +15,20 @@ class Admin {
 
   factory Admin.fromJson(Map<String, dynamic> json) {
     return Admin(
-      id: json['_id']?.toString() ?? '',
+      id: json['_id'].toString(), // <-- shu yerda o'zgartirish kerak bo'lishi mumkin
       firstName: json['firstName'] ?? '',
       lastName: json['lastName'] ?? '',
-      login: json['login'] ?? '',
+      login: json['username'] ?? '',
       password: json['password'] ?? '',
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'firstName': firstName,
+    'lastName': lastName,
+    'username': login,
+    'password': password,
+
+  };
 }

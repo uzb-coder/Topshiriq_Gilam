@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../Model/Admin.dart';
-import '../Servis/api_service.dart';
+import '../Controller/api_service.dart';
+import '../Model/Admin_Model.dart';
 
 class AdminListScreen extends StatefulWidget {
   const AdminListScreen({super.key});
@@ -51,45 +51,22 @@ class _AdminListScreenState extends State<AdminListScreen> {
               final admin = admins[index];
               return Card(
                 margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
+                child: ListTile(
+                  leading: const Icon(Icons.person, color: Colors.blue),
+                  title: Text('${admin.firstName} ${admin.lastName}'),
+                  subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildInfoRow('Ism', admin.firstName),
-                      _buildInfoRow('Familiya', admin.lastName),
-                      _buildInfoRow('Login', admin.login),
-                      _buildInfoRow('Parol', '******'), // Parol yulduzcha bilan
+                      Text('Login: ${admin.login}'),
+                      Text('ID: ${admin.id}'),
                     ],
                   ),
+                  isThreeLine: true,
                 ),
               );
             },
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Text(
-            '$label: ',
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontSize: 16),
-            ),
-          ),
-        ],
       ),
     );
   }

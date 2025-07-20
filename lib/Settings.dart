@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-
 import 'Drawers.dart';
+import 'Model/company_model.dart';
+import 'Controller/api_service.dart';
 
 class SozlamalarPage extends StatelessWidget {
   final TextEditingController _nomiController = TextEditingController();
@@ -8,6 +9,40 @@ class SozlamalarPage extends StatelessWidget {
   final TextEditingController _telefonController = TextEditingController();
 
   SozlamalarPage({super.key});
+
+  void _saqlash(BuildContext context) async {
+    final nom = _nomiController.text.trim();
+    final manzil = _manzilController.text.trim();
+    final telefon = _telefonController.text.trim();
+
+    if (nom.isEmpty || manzil.isEmpty || telefon.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Iltimos, barcha maydonlarni to\'ldiring')),
+      );
+      return;
+    }
+
+    CompanyModel company = CompanyModel(
+      name: nom,
+      address: manzil,
+      phone: telefon,
+    );
+
+    final response = await ApiService.createCompany(company.toJson());
+
+    if (response.statusCode == 200) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('✅ Kompaniya muvaffaqiyatli saqlandi')),
+      );
+      _nomiController.clear();
+      _manzilController.clear();
+      _telefonController.clear();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('❌ Xatolik: ${response.statusCode}')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,16 +96,7 @@ class SozlamalarPage extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () {
-                      // Saqlash logikasi bu yerga yoziladi
-                      final nom = _nomiController.text;
-                      final manzil = _manzilController.text;
-                      final telefon = _telefonController.text;
-
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Saqlandi: $nom, $manzil, $telefon')),
-                      );
-                    },
+                    onPressed: () => _saqlash(context),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blue,
                       padding: const EdgeInsets.symmetric(vertical: 15),

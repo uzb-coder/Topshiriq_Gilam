@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'Adminlar.dart';
+
 import 'Buyurtma_yaratish.dart';
-import 'Page/AdminListPage.dart';
-import 'Page/Login.dart';
+import 'Harajatlar.dart';
 import 'TTT.dart';
+
 
 void main() {
   runApp(const MyApp());
@@ -21,7 +21,7 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.blue,
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
-      home:  AdminScreen(),
+      home:  YangiBuyurtmalarPage(),
     );
   }
 }

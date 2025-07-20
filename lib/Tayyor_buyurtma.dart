@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
-
+import 'package:geolocator/geolocator.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:url_launcher/url_launcher_string.dart';
+import 'dart:convert';
+import '../Model/orderwashed_model.dart';
+import 'Controller/api_service.dart';
 import 'Drawers.dart';
 
 class ClientOrderCardPage extends StatefulWidget {
@@ -10,23 +15,51 @@ class ClientOrderCardPage extends StatefulWidget {
 }
 
 class _ClientOrderCardPageState extends State<ClientOrderCardPage> {
-  final String mijozName = 'Bahromjon Abdulhayev';
-  final String telefon = '789598979';
-  final String manzil = 'Pop';
-  final String tavsif = '';
-  final String umumiySumma = '80 000';
-  final String yetkazishDate = '11-06-2025';
-  final String cardDate = '02-06-2025';
+  List<OrderwashedModel> orders = [];
 
-  void _showServislarDetailsDialog(BuildContext context) {
-    double eni = 2.0;
-    double boyi = 4.0;
+
+
+
+  @override
+  void initState() {
+    super.initState();
+    fetchOrder();
+  }
+
+  Future<void> fetchOrder() async {
+    final response = await ApiService.getWashedOrders();
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body)['innerData'] as List;
+      setState(() {
+        orders = data.map((e) => OrderwashedModel.fromJson(e)).toList();
+      });
+    } else {
+      print('❌ Ma\'lumotlarni olishda xatolik');
+    }
+  }
+
+  Future<void> openMapUniversal(double lat, double lng) async {
+    final Uri mapUrl = Uri.parse("https://www.google.com/maps/search/?api=1&query=$lat,$lng");
+
+    if (!await launchUrl(mapUrl, mode: LaunchMode.externalApplication)) {
+      print('❌ Xarita ochilmadi');
+    }
+  }
+
+
+  void _showServislarDetailsDialog(BuildContext context, OrderwashedModel order) {
+    if (order.services.isEmpty) return;
+
+    final service = order.services.first;
+    double eni = service.width.toDouble();
+    double boyi = service.height.toDouble();
     double kvadrat = eni * boyi;
-    int miqdori = 1;
-    double birlikNarx = 10.000;
+    int miqdori = service.quantity;
+    double birlikNarx = service.pricePerSquareMeter.toDouble();
     double umumiyNarx = (kvadrat * birlikNarx) * miqdori;
 
-    ValueNotifier<bool> isGilamSelected = ValueNotifier<bool>(false);
+    ValueNotifier<bool> isSelected = ValueNotifier(false);
 
     showDialog(
       context: context,
@@ -50,32 +83,26 @@ class _ClientOrderCardPageState extends State<ClientOrderCardPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 ValueListenableBuilder<bool>(
-                  valueListenable: isGilamSelected,
+                  valueListenable: isSelected,
                   builder: (context, isChecked, _) {
                     return Row(
                       children: [
                         Checkbox(
                           value: isChecked,
-                          onChanged:
-                              (bool? newValue) =>
-                                  isGilamSelected.value = newValue ?? false,
+                          onChanged: (bool? newValue) =>
+                          isSelected.value = newValue ?? false,
                         ),
-                        const Text('Gilam'),
+                        Text(service.title),
                       ],
                     );
                   },
                 ),
                 const SizedBox(height: 8.0),
-                Text(
-                  'Eni: ${eni.toStringAsFixed(0)} × Bo\'yi: ${boyi.toStringAsFixed(0)} = Kvadrat: ${kvadrat.toStringAsFixed(0)}',
-                ),
-                const SizedBox(height: 4.0),
+                Text('Eni: ${eni.toInt()} × Bo\'yi: ${boyi.toInt()} = Kvadrat: ${kvadrat.toInt()}'),
                 Text('Miqdori: $miqdori'),
-                const SizedBox(height: 4.0),
-                Text('Birlik narx: ${birlikNarx.toStringAsFixed(3)}'),
-                const SizedBox(height: 4.0),
+                Text('Birlik narx: ${birlikNarx.toStringAsFixed(0)}'),
                 Text(
-                  'Umumiy narx: (${kvadrat.toStringAsFixed(0)} × ${birlikNarx.toStringAsFixed(3)}) × $miqdori = ${umumiyNarx.toStringAsFixed(3)}',
+                  'Umumiy narx: (${kvadrat.toInt()} × ${birlikNarx.toStringAsFixed(0)}) × $miqdori = ${umumiyNarx.toStringAsFixed(0)}',
                 ),
               ],
             ),
@@ -87,7 +114,7 @@ class _ClientOrderCardPageState extends State<ClientOrderCardPage> {
             ),
             ElevatedButton(
               onPressed: () {
-                print('Saqlash');
+                // TODO: Saqlash
                 Navigator.of(context).pop();
               },
               child: const Text('Saqlash'),
@@ -117,55 +144,55 @@ class _ClientOrderCardPageState extends State<ClientOrderCardPage> {
       drawer: AppDrawer(),
       appBar: AppBar(
         centerTitle: true,
-        title: const Text('Buyurtma tafsilotlari'),
+        title: const Text('Tayyor Buyurtmalar'),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Card(
-          elevation: 5,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          shadowColor: Colors.black54,
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Sana tepada
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    cardDate,
-                    style: const TextStyle(
-                      color: Colors.grey,
-                      fontSize: 14,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                // Ma'lumotlar
-                _buildRow('Mijoz:', mijozName),
-                _buildRow('Telefon:', telefon),
-                _buildRow('Manzil:', manzil),
-                _buildRow('Tavsif:', tavsif),
-                _buildRow('Umumiy summa:', '$umumiySumma so\'m'),
-                _buildRow('Yetkazish:', yetkazishDate),
-
-                const SizedBox(height: 20),
-
-                // Tugmalar
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      body: orders.isEmpty
+          ? const Center(child: CircularProgressIndicator())
+          : ListView.builder(
+        itemCount: orders.length,
+        itemBuilder: (context, index) {
+          final order = orders[index];
+          return Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Card(
+              elevation: 5,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              shadowColor: Colors.black54,
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        order.createdAt?.substring(0, 10) ?? '',
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 14,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _buildRow('Mijoz:', '${order.clientName}'),
+                    _buildRow('Telefon:', order.phone),
+                    _buildRow('Manzil:', order.address),
+                    _buildRow('Tavsif:', ''),
+                    _buildRow(
+                        'Umumiy summa:',
+                        '${order.totalSum.toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (match) => ' ')} so\'m'),
+                    _buildRow('Yetkazish:', order.deliveryDate.split('T')[0]),
+                    const SizedBox(height: 20),
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         ElevatedButton.icon(
-                          onPressed: () => _showServislarDetailsDialog(context),
+                          onPressed: () => _showServislarDetailsDialog(context, order),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.blue,
                             shape: RoundedRectangleBorder(
@@ -178,11 +205,14 @@ class _ClientOrderCardPageState extends State<ClientOrderCardPage> {
                             style: TextStyle(color: Colors.white),
                           ),
                         ),
-                        const SizedBox(width: 10),
                         OutlinedButton.icon(
                           onPressed: () {
-                            print('Haritaga o\'tish bosildi');
-                          },
+                            final loc = order.location;
+                            if (loc != null) {
+                              openMapUniversal(loc.latitude, loc.longitude);
+                            } else {
+                              print("❌ Lokatsiya mavjud emas");
+                            }                          },
                           icon: const Icon(Icons.map_outlined),
                           label: const Text("Haritaga o'tish"),
                           style: OutlinedButton.styleFrom(
@@ -193,14 +223,15 @@ class _ClientOrderCardPageState extends State<ClientOrderCardPage> {
                             foregroundColor: Colors.blue,
                           ),
                         ),
+
                       ],
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }

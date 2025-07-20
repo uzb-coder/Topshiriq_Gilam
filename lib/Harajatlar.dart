@@ -1,56 +1,37 @@
 import 'package:flutter/material.dart';
-
+import '../controller/api_service.dart';
+import '../Model/expense_Model.dart';
 import 'Drawers.dart';
-
-// Data model for an expense
-class Expense {
-  final String name;
-  final double amount;
-  final String paymentType;
-  final String description;
-  final DateTime date; // To store when the expense was added
-
-  Expense({
-    required this.name,
-    required this.amount,
-    required this.paymentType,
-    this.description = '',
-    required this.date,
-  });
-}
+import 'Model/expenses_create_model.dart';
 
 class HarajatlarPage extends StatefulWidget {
   const HarajatlarPage({super.key});
 
   @override
-  State<HarajatlarPage> createState() => _ExpenseManagementPageState();
+  State<HarajatlarPage> createState() => _HarajatlarPageState();
 }
 
-class _ExpenseManagementPageState extends State<HarajatlarPage>
+class _HarajatlarPageState extends State<HarajatlarPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final List<Expense> _expenses = []; // List to store all added expenses
+  late Future<List<Expenses>> _expensesFuture;
 
-  // Controllers for the form fields
+  final _formKey = GlobalKey<FormState>();
   final TextEditingController _harajatNomiController = TextEditingController();
   final TextEditingController _pulMiqdoriController = TextEditingController();
-  String? _selectedTolovTuri; // For the dropdown
   final TextEditingController _tavsifController = TextEditingController();
+  String? _selectedTolovTuri;
 
-  final _formKey = GlobalKey<FormState>(); // Key for form validation
-
-  // Sample payment types for the dropdown
   final List<String> _tolovTurlari = [
     'Naqd',
-    'Bank o\'tkazmasi',
     'Karta',
-    'Boshqa',
   ];
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _expensesFuture = ApiService.getAllExpenses();
   }
 
   @override
@@ -62,41 +43,6 @@ class _ExpenseManagementPageState extends State<HarajatlarPage>
     super.dispose();
   }
 
-  void _saveExpense() {
-    if (_formKey.currentState!.validate()) {
-      final String name = _harajatNomiController.text;
-      final double amount = double.parse(_pulMiqdoriController.text);
-      final String paymentType = _selectedTolovTuri!;
-      final String description = _tavsifController.text;
-
-      setState(() {
-        _expenses.add(
-          Expense(
-            name: name,
-            amount: amount,
-            paymentType: paymentType,
-            description: description,
-            date: DateTime.now(), // Record the current date/time
-          ),
-        );
-      });
-
-      // Clear form fields
-      _harajatNomiController.clear();
-      _pulMiqdoriController.clear();
-      _tavsifController.clear();
-      _selectedTolovTuri = null; // Clear selected dropdown value
-
-      // Show a success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Harajat muvaffaqiyatli saqlandi!')),
-      );
-
-      // Optionally, switch to the Harajatlar tab to see the new entry
-      _tabController.animateTo(0);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -104,23 +50,122 @@ class _ExpenseManagementPageState extends State<HarajatlarPage>
       appBar: AppBar(
         backgroundColor: Colors.blue,
         centerTitle: true,
-        title: const Text('Harajatlar boshqaruvi'),
+        title: const Text('Harajatlar boshqaruvi',style: TextStyle(color: Colors.white),),
         bottom: TabBar(
           controller: _tabController,
+          unselectedLabelColor: Colors.white,  // Tanlanmagan tab yozuvi rangi
+          indicatorColor: Colors.white,        // Pastki chiziq rangi (indicator)
           tabs: const [Tab(text: 'Harajatlar'), Tab(text: 'Harajat yozish')],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildExpenseListView(), // Harajatlar tab content
-          _buildExpenseForm(), // Harajat yozish tab content
+          _buildStyledExpenseList(),
+          _buildExpenseForm(),
         ],
       ),
     );
   }
 
+  Widget _buildStyledExpenseList() {
+    return FutureBuilder<List<Expenses>>(
+      future: _expensesFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        } else if (snapshot.hasError) {
+          return Center(child: Text("❌ Xatolik: ${snapshot.error}"));
+        } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(child: Text("⚠️ Xarajatlar topilmadi"));
+        }
+
+        final expenses = snapshot.data!;
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: expenses.length,
+          itemBuilder: (context, index) {
+            final e = expenses[index];
+            return Card(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(color: Colors.blue.shade200, width: 1),
+              ),
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              elevation: 4,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      e.name,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text("💰 Summasi: ${e.amount} so'm"),
+                    Text("💳 To'lov turi: ${e.paymentType}"),
+                    Text("📝 Tavsif: ${e.description.isEmpty ? '-' : e.description}"),
+                    Text("📅 Sana: ${e.createdAt.toLocal().toString().substring(0, 16)}"),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildExpenseForm() {
+    bool _isLoading = false;
+
+    void _submitExpenseForm() async {
+      if (!_formKey.currentState!.validate()) return;
+
+      final newExpense = Expenses_Create(
+        name: _harajatNomiController.text,
+        amount: int.tryParse(_pulMiqdoriController.text) ?? 0,
+        paymentType: _selectedTolovTuri ?? '',
+        description: _tavsifController.text,
+      );
+
+      setState(() => _isLoading = true);
+
+      final result = await ApiService.createExpense(newExpense.toJson());
+
+      setState(() => _isLoading = false);
+
+      if (result.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✅ Harajat muvaffaqiyatli saqlandi!')),
+        );
+
+        // Formani tozalash
+        _formKey.currentState!.reset();
+        _harajatNomiController.clear();
+        _pulMiqdoriController.clear();
+        _tavsifController.clear();
+        _selectedTolovTuri = null;
+
+        // Ro'yxatni yangilash
+        setState(() {
+          _expensesFuture = ApiService.getAllExpenses();
+        });
+
+        // Harajatlar tabiga qaytish
+        _tabController.animateTo(0);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ Xatolik: ${result.body}')),
+        );
+      }
+    }
+
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Form(
@@ -129,34 +174,22 @@ class _ExpenseManagementPageState extends State<HarajatlarPage>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Harajat nomi
-              const Text(
-                '* Harajat nomi',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8.0),
+              _buildRequiredLabel('Harajat nomi'),
+              const SizedBox(height: 8),
               TextFormField(
                 controller: _harajatNomiController,
                 decoration: const InputDecoration(
-                  hintText: 'Masalan: kommunal to\'lov',
+                  hintText: 'Masalan: Kommunal to‘lov',
                   border: OutlineInputBorder(),
                   isDense: true,
                 ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Harajat nomi kiritilishi shart';
-                  }
-                  return null;
-                },
+                validator: (value) =>
+                value == null || value.isEmpty ? 'Harajat nomi kiritilishi shart' : null,
               ),
-              const SizedBox(height: 16.0),
+              const SizedBox(height: 16),
 
-              // Pul miqdori
-              const Text(
-                '* Pul miqdori',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8.0),
+              _buildRequiredLabel('Pul miqdori'),
+              const SizedBox(height: 8),
               TextFormField(
                 controller: _pulMiqdoriController,
                 keyboardType: TextInputType.number,
@@ -166,84 +199,63 @@ class _ExpenseManagementPageState extends State<HarajatlarPage>
                   isDense: true,
                 ),
                 validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Pul miqdori kiritilishi shart';
-                  }
-                  if (double.tryParse(value) == null) {
-                    return 'Noto\'g\'ri miqdor';
-                  }
+                  if (value == null || value.isEmpty) return 'Pul miqdori kiritilishi shart';
+                  if (double.tryParse(value) == null) return 'Noto‘g‘ri raqam';
                   return null;
                 },
               ),
-              const SizedBox(height: 16.0),
+              const SizedBox(height: 16),
 
-              // To'lov turi
-              const Text(
-                '* To\'lov turi',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8.0),
+              _buildRequiredLabel('To‘lov turi'),
+              const SizedBox(height: 8),
               DropdownButtonFormField<String>(
                 value: _selectedTolovTuri,
-                hint: const Text('To\'lov turini tanlang'),
+                hint: const Text('To‘lov turini tanlang'),
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),
                   isDense: true,
                 ),
-                items:
-                    _tolovTurlari.map((String type) {
-                      return DropdownMenuItem<String>(
-                        value: type,
-                        child: Text(type),
-                      );
-                    }).toList(),
-                onChanged: (String? newValue) {
-                  setState(() {
-                    _selectedTolovTuri = newValue;
-                  });
-                },
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'To\'lov turi tanlanishi shart';
-                  }
-                  return null;
-                },
+                items: _tolovTurlari
+                    .map((type) => DropdownMenuItem(value: type, child: Text(type)))
+                    .toList(),
+                onChanged: (val) => setState(() => _selectedTolovTuri = val),
+                validator: (value) =>
+                value == null || value.isEmpty ? 'To‘lov turi tanlanishi shart' : null,
               ),
-              const SizedBox(height: 16.0),
+              const SizedBox(height: 16),
 
-              // Tavsif
-              const Text(
-                'Tavsif',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8.0),
+              const Text('Tavsif', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
               TextFormField(
                 controller: _tavsifController,
-                maxLines: 4,
+                maxLines: 3,
                 decoration: const InputDecoration(
-                  hintText: 'Qo\'shimcha ma\'lumot',
+                  hintText: 'Qo‘shimcha ma‘lumot',
                   border: OutlineInputBorder(),
-                  alignLabelWithHint: true, // Aligns hint text at the top
                 ),
               ),
-              const SizedBox(height: 24.0),
+              const SizedBox(height: 24),
 
-              // Saqlash button
               SizedBox(
-                width: double.infinity, // Makes the button fill width
-                child: ElevatedButton(
-                  onPressed: _saveExpense,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12.0),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(
-                        8.0,
-                      ), // Rounded corners
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _isLoading ? null : _submitExpenseForm,
+                  icon: _isLoading
+                      ? const SizedBox(
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
                     ),
-                  ),
-                  child: const Text(
-                    'Saqlash',
-                    style: TextStyle(fontSize: 16.0),
+                  )
+                      : const Icon(Icons.save),
+                  label: Text(_isLoading ? 'Yuborilmoqda...' : 'Saqlash', style: const TextStyle(fontSize: 16)),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                 ),
               ),
@@ -253,6 +265,8 @@ class _ExpenseManagementPageState extends State<HarajatlarPage>
       ),
     );
   }
+
+
   Widget _buildRequiredLabel(String label) {
     return RichText(
       text: TextSpan(
@@ -265,96 +279,9 @@ class _ExpenseManagementPageState extends State<HarajatlarPage>
         children: const [
           TextSpan(
             text: ' *',
-            style: TextStyle(
-              color: Colors.red,
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(color: Colors.red),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildExpenseListView() {
-    if (_expenses.isEmpty) {
-      return const Center(child: Text('Hali harajatlar qo\'shilmagan.'));
-    }
-    return SingleChildScrollView(
-      scrollDirection: Axis.vertical,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Card(
-          elevation: 2.0,
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal, // For wider tables
-            child: DataTable(
-              columnSpacing: 16.0, // Space between columns
-              headingRowColor: MaterialStateProperty.resolveWith<Color?>((
-                Set<MaterialState> states,
-              ) {
-                return Theme.of(
-                  context,
-                ).colorScheme.primary.withOpacity(0.1); // Light blue header
-              }),
-              columns: const [
-                DataColumn(
-                  label: Text(
-                    'Nomi',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-                DataColumn(
-                  label: Text(
-                    'Miqdori',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-                DataColumn(
-                  label: Text(
-                    'To\'lov turi',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-                DataColumn(
-                  label: Text(
-                    'Tavsif',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-                DataColumn(
-                  label: Text(
-                    'Sana',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-              rows:
-                  _expenses.map((expense) {
-                    return DataRow(
-                      cells: [
-                        DataCell(Text(expense.name)),
-                        DataCell(
-                          Text('${expense.amount.toStringAsFixed(0)} UZS'),
-                        ), // Format amount
-                        DataCell(Text(expense.paymentType)),
-                        DataCell(
-                          Text(
-                            expense.description.isNotEmpty
-                                ? expense.description
-                                : '-',
-                          ),
-                        ),
-                        DataCell(
-                          Text(
-                            '${expense.date.day.toString().padLeft(2, '0')}-${expense.date.month.toString().padLeft(2, '0')}-${expense.date.year}',
-                          ),
-                        ),
-                      ],
-                    );
-                  }).toList(),
-            ),
-          ),
-        ),
       ),
     );
   }

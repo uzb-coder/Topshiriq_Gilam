@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:intl/intl.dart';
 
+import 'Controller/api_service.dart';
 import 'Drawers.dart';
+import 'Model/order_create_model.dart';
 import 'db_helper.dart';
 
 class YangiBuyurtmalarPage extends StatefulWidget {
@@ -93,46 +96,87 @@ class _NewOrderScreenState extends State<YangiBuyurtmalarPage> {
     ).showSnackBar(const SnackBar(content: Text("📍 Geolokatsiya olindi!")));
   }
 
+  DateTime? _selectedDeliveryDate;
+
+
   Future<void> _saveOrder() async {
     try {
-      final orderData = {
-        'name': _nameController.text,
-        'surname': _surnameController.text,
-        'phone': _phoneController.text,
-        'address': _addressController.text,
-        'description': _descriptionController.text,
-        'mainService': _selectedService,
-        'mainQuantity': _quantityController.text,
-        'deliveryDate': _deliveryDateController.text,
-      };
+      // 1. Asosiy xizmatni qo‘shish
+      List<Map<String, dynamic>> allServices = [];
 
-      int id = await DBHelper.insertOrder(orderData);
-      await DBHelper.insertAddedServices(id, _addedServices);
+      if (_selectedService != null && _quantityController.text.isNotEmpty) {
+        allServices.add({
+          'title': _selectedService,
+          'quantity': int.tryParse(_quantityController.text) ?? 1,
+          'width': 0,
+          'height': 0,
+          'area': 0,
+          'status': 'new',
+          'comment': '',
+        });
+      }
 
-      // ✅ Buyurtma muvaffaqiyatli saqlandi
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("✅ Buyurtma saqlandi!")));
+      // 2. Qo‘shimcha xizmatlarni qo‘shish
+      for (var s in _addedServices) {
+        if (s['service'] != null && s['quantity'].toString().isNotEmpty) {
+          allServices.add({
+            'title': s['service'],
+            'quantity': int.tryParse(s['quantity'].toString()) ?? 1,
+            'width': 0,
+            'height': 0,
+            'area': 0,
+            'status': 'new',
+            'price': 0,
+            'comment': '',
+          });
+        }
+      }
 
-      // 🔁 Barcha inputlarni tozalash
-      _nameController.clear();
-      _surnameController.clear();
-      _phoneController.clear();
-      _addressController.clear();
-      _descriptionController.clear();
-      _quantityController.clear();
-      _deliveryDateController.clear();
-      setState(() {
-        _selectedService = null;
-        _addedServices.clear();
-      });
+      final formattedDate = DateFormat("yyyy-MM-dd").format(DateTime.now()); // yoki _selectedDeliveryDate ?? DateTime.now()
+
+      final order = OrderCreateModel(
+        firstName: _nameController.text,
+        lastName: _surnameController.text,
+        phone: _phoneController.text,
+        addressText: _addressController.text,
+        description: _descriptionController.text,
+        deliveryDate: formattedDate, // ✅ to‘g‘ri format
+        services: allServices,
+      );
+
+
+      final response = await ApiService.createOrder(order);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("✅ Buyurtma API orqali yuborildi!")),
+        );
+
+        _nameController.clear();
+        _surnameController.clear();
+        _phoneController.clear();
+        _addressController.clear();
+        _descriptionController.clear();
+        _quantityController.clear();
+        _deliveryDateController.clear();
+
+        setState(() {
+          _selectedService = null;
+          _addedServices.clear();
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("❌ Xatolik: ${response.body}")),
+        );
+      }
     } catch (e) {
-      // ❌ Xatolik yuz berdi
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("❌ Xatolik: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("❌ Xatolik: $e")),
+      );
     }
   }
+
+
 
   @override
   Widget build(BuildContext context) {
