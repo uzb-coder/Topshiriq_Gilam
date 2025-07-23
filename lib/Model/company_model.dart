@@ -9,9 +9,21 @@ class CompanyModel {
     required this.phone,
   });
 
-  Map<String, dynamic> toJson() => {
-    'name': name,
-    'address': address,
-    'phone': phone,
-  };
+
+  // Bu yerda toJson metodini qo‘shamiz
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'address': address,
+      'phone': phone,
+    };
+  }
+
+  factory CompanyModel.fromJson(Map<String, dynamic> json) {
+    return CompanyModel(
+      name: json['name'] ?? '',
+      address: json['address'] ?? '',
+      phone: json['phone'] ?? '',
+    );
+  }
 }

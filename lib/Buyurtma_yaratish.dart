@@ -5,7 +5,6 @@ import 'package:intl/intl.dart';
 import 'Controller/api_service.dart';
 import 'Drawers.dart';
 import 'Model/order_create_model.dart';
-import 'db_helper.dart';
 
 class YangiBuyurtmalarPage extends StatefulWidget {
   const YangiBuyurtmalarPage({super.key});
@@ -24,7 +23,7 @@ class _NewOrderScreenState extends State<YangiBuyurtmalarPage> {
   final TextEditingController _deliveryDateController = TextEditingController();
 
   String? _selectedService;
-  final List<String> _services = ['Xizmat 1', 'Xizmat 2', 'Xizmat 3'];
+  final List<String> _services = ['Parda', 'Gilam', 'Adyol'];
   final List<Map<String, dynamic>> _addedServices = [];
 
   Widget _buildRequiredLabel(String label) {
@@ -41,7 +40,8 @@ class _NewOrderScreenState extends State<YangiBuyurtmalarPage> {
     );
   }
 
-  InputDecoration _commonInputDecoration(String hintText) {
+  InputDecoration
+  _commonInputDecoration(String hintText) {
     return InputDecoration(
       hintText: hintText,
       filled: true,
@@ -67,11 +67,16 @@ class _NewOrderScreenState extends State<YangiBuyurtmalarPage> {
     );
     if (picked != null) {
       setState(() {
+        _selectedDeliveryDate = picked;  // <-- MUHIM!
         _deliveryDateController.text =
-            "${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}";
+            DateFormat('dd/MM/yyyy').format(picked);
       });
     }
   }
+
+
+
+  Map<String, double>? _locationCoordinates;
 
   Future<void> _getLocation() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -87,14 +92,17 @@ class _NewOrderScreenState extends State<YangiBuyurtmalarPage> {
 
     Position position = await Geolocator.getCurrentPosition();
     setState(() {
-      _addressController.text = "${position.latitude}, ${position.longitude}";
+      _locationCoordinates = {
+        'lat': position.latitude,
+        'lng': position.longitude,
+      };
     });
 
-    // ✅ Snackbar ko‘rsatish
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text("📍 Geolokatsiya olindi!")));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("📍 Geolokatsiya olindi!")),
+    );
   }
+
 
   DateTime? _selectedDeliveryDate;
 
@@ -132,7 +140,10 @@ class _NewOrderScreenState extends State<YangiBuyurtmalarPage> {
         }
       }
 
-      final formattedDate = DateFormat("yyyy-MM-dd").format(DateTime.now()); // yoki _selectedDeliveryDate ?? DateTime.now()
+      final formattedDate = DateFormat("yyyy-MM-dd").format(
+        _selectedDeliveryDate!,
+      );
+
 
       final order = OrderCreateModel(
         firstName: _nameController.text,
@@ -142,8 +153,19 @@ class _NewOrderScreenState extends State<YangiBuyurtmalarPage> {
         description: _descriptionController.text,
         deliveryDate: formattedDate, // ✅ to‘g‘ri format
         services: allServices,
+        location: _locationCoordinates, // 👈 bu joyni qo‘shing
       );
 
+      // 👇 Shu yerga printlar qo‘shing
+      print(">>> Yuborilayotgan buyurtma:");
+      print("Ism: ${order.firstName}");
+      print("Familiya: ${order.lastName}");
+      print("Telefon: ${order.phone}");
+      print("Manzil: ${order.addressText}");
+      print("Tavsif: ${order.description}");
+      print("Yetkazib berish sanasi: ${order.deliveryDate}");
+      print("Xizmatlar: ${order.services}");
+      print("Geolokatsiya: ${order.location}");
 
       final response = await ApiService.createOrder(order);
 
@@ -169,11 +191,14 @@ class _NewOrderScreenState extends State<YangiBuyurtmalarPage> {
           SnackBar(content: Text("❌ Xatolik: ${response.body}")),
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('❌ Xatolik: $e');
+      print('📌 Stack: $stackTrace');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("❌ Xatolik: $e")),
       );
     }
+
   }
 
 
@@ -286,11 +311,11 @@ class _NewOrderScreenState extends State<YangiBuyurtmalarPage> {
                     value: _selectedService,
                     decoration: _commonInputDecoration('Xizmat turi'),
                     items:
-                        _services
-                            .map(
-                              (s) => DropdownMenuItem(value: s, child: Text(s)),
-                            )
-                            .toList(),
+                    _services
+                        .map(
+                          (s) => DropdownMenuItem(value: s, child: Text(s)),
+                    )
+                        .toList(),
                     onChanged: (val) => setState(() => _selectedService = val),
                   ),
                 ),
@@ -315,16 +340,16 @@ class _NewOrderScreenState extends State<YangiBuyurtmalarPage> {
                       value: item['service'],
                       decoration: _commonInputDecoration('Servisni tanlang'),
                       items:
-                          _services
-                              .map(
-                                (s) =>
-                                    DropdownMenuItem(value: s, child: Text(s)),
-                              )
-                              .toList(),
+                      _services
+                          .map(
+                            (s) =>
+                            DropdownMenuItem(value: s, child: Text(s)),
+                      )
+                          .toList(),
                       onChanged:
                           (val) => setState(
                             () => _addedServices[index]['service'] = val,
-                          ),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -343,7 +368,7 @@ class _NewOrderScreenState extends State<YangiBuyurtmalarPage> {
                           onPressed:
                               () => setState(
                                 () => _addedServices.removeAt(index),
-                              ),
+                          ),
                         ),
                       ),
                     ),
@@ -356,7 +381,7 @@ class _NewOrderScreenState extends State<YangiBuyurtmalarPage> {
               onTap:
                   () => setState(
                     () => _addedServices.add({'service': null, 'quantity': ''}),
-                  ),
+              ),
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(

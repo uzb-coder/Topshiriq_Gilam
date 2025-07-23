@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'Buyurtma_yaratish.dart';
 import 'Harajatlar.dart';
 import 'TTT.dart';
+import 'Tayyor_buyurtma.dart';
+import 'YangiBuyurtma.dart';
 
 
 void main() {

@@ -6,6 +6,7 @@ import '../Model/expense_Model.dart';
 import '../Model/ServiceModel.dart';
 import '../Model/order_create_model.dart';
 import '../Model/order_model.dart';
+import '../Model/orderwashed_model.dart';
 
 class ApiService {
   static const String baseUrl = 'https://gilam-b.vercel.app/api';
@@ -104,22 +105,19 @@ class ApiService {
   }
 
   /// 6. Barcha companionably olish
-    static Future<CompanyModel> getCompany() async {
+  static Future<CompanyModel> getCompany() async {
     final url = Uri.parse('$baseUrl/company/all');
 
     final response = await http.get(url, headers: _headers);
+    print("📡 Status code: ${response.statusCode}");
+    print("📦 Body: ${response.body}");
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      return CompanyModel(
-        name: data['name'],
-        address: data['address'],
-        phone: data['phone'],
-      );
+      return CompanyModel.fromJson(data);
     } else {
       throw Exception('Company maʼlumotlari olinmadi: ${response.statusCode}');
     }
   }
-
 
   /// 7. Yangi kompaniya yaratish
   static Future<http.Response> createCompany(Map<String, dynamic> data) async {
@@ -175,20 +173,22 @@ class ApiService {
       headers: _headers,
       body: jsonEncode(order.toJson()),
     );
-    print("📥 Status: ${response.statusCode}");
-    print("📦 Body: ${response.body}");
+    print(">>> API manzili: $url");
+    print(">>> Jo‘natilayotgan JSON: ${jsonEncode(order.toJson())}");
+
     return response;
   }
 
-
   /// 14. Barcha buyurtmalarni olish
-  static Future<List<Order>> getAllOrders() async {
+  static Future<List<OrderwashedModel>> getAllOrders() async {
     final url = Uri.parse('$baseUrl/order');
     final response = await http.get(url, headers: _headers);
+
     if (response.statusCode == 200) {
       final Map<String, dynamic> jsonResponse = jsonDecode(response.body);
       final List<dynamic> orderList = jsonResponse['innerData'] ?? [];
-      return orderList.map((json) => Order.fromJson(json)).toList();
+
+      return orderList.map((json) => OrderwashedModel.fromJson(json)).toList();
     } else {
       throw Exception('Buyurtmalarni olishda xatolik: ${response.body}');
     }
@@ -196,11 +196,33 @@ class ApiService {
 
   /// 15. Buyurtmani yangilash (ID orqali)
   static Future<http.Response> updateOrder(
-    String orderId,
+    String id,
     Map<String, dynamic> data,
   ) async {
-    final url = Uri.parse('$baseUrl/order/$orderId');
-    return await http.patch(url, headers: _headers, body: jsonEncode(data));
+    if (id.isEmpty) {
+      throw ArgumentError("❌ Order ID bo'sh bo'lishi mumkin emas!");
+    }
+
+    final url = Uri.parse('$baseUrl/order/$id/'); // ✅ Oxirida / bo‘lishi kerak
+
+    try {
+      final response = await http.patch(
+        url,
+        headers: _headers,
+        body: jsonEncode(data),
+      );
+
+      // 🧾 Loglar
+      print('📦 Yuborilayotgan ma\'lumotlar: $data');
+      print('🔗 So\'rov URL: $url');
+      print('📬 Javob status code: ${response.statusCode}');
+      print('📨 Javob body: ${response.body}');
+
+      return response;
+    } catch (e) {
+      print("🚨 PATCH so‘rovda xatolik: $e");
+      rethrow; // Xatolikni tashqariga chiqarish
+    }
   }
 
   /// 16. Yangi kelgan buyurtmalarni olish
@@ -228,7 +250,11 @@ class ApiService {
   static Future<http.Response> createExpense(Map<String, dynamic> data) async {
     final url = Uri.parse('$baseUrl/expense/create');
 
-    final response = await http.post(url,headers: _headers,body: jsonEncode(data),    );
+    final response = await http.post(
+      url,
+      headers: _headers,
+      body: jsonEncode(data),
+    );
     print('📦 Body: ${response.body}');
     return response;
   }

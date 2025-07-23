@@ -1,8 +1,11 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../Controller/api_service.dart';
 import '../Model/order_model.dart';
 import 'Drawers.dart';
+import 'Model/orderwashed_model.dart';
 
 class Client {
   final String id;
@@ -11,7 +14,8 @@ class Client {
   final String address;
   final String description;
   final String date;
-
+  final int totalSum;
+  final List<ServiceModel> services; // ✅ Bu yerda services qo‘shamiz
   Client({
     required this.id,
     required this.name,
@@ -19,6 +23,8 @@ class Client {
     required this.address,
     required this.description,
     required this.date,
+    required this.totalSum,
+    required this.services,
   });
 }
 
@@ -39,19 +45,31 @@ class _ClientListPageState extends State<ClientListPage> {
   }
 
   Future<List<Client>> _loadClientsFromApi() async {
-    final orders = await ApiService.getAllOrders();
-    return orders.map((order) {
-      return Client(
-        id: order.id, // kerakli qism
-        name: order.fullName,
-        phoneNumber: order.phone,
-        address: order.address,
-        description: order.description,
-        date: formatDate(order.createdAt),
-      );
-    }).toList();
+    final response =
+        await ApiService.getNewOrders(); // ⬅️ faqat yangi buyurtmalar
+    if (response.statusCode == 200) {
+      final Map<String, dynamic> jsonResponse = jsonDecode(response.body);
+      final List<dynamic> orderList = jsonResponse['innerData'] ?? [];
+      return orderList.map((json) {
+        final order = Order.fromJson(json);
+        return Client(
+          id: order.id,
+          name: order.fullName,
+          phoneNumber: order.phone,
+          address: order.address,
+          description: order.description,
+          date: formatDate(order.createdAt),
+          totalSum: order.totalSum,
+          services:(json['services'] as List<dynamic>?)
+                  ?.map((e) => ServiceModel.fromJson(e))
+                  .toList() ??
+              [], // ✅ parse qilish
+        );
+      }).toList();
+    } else {
+      throw Exception('Yangi buyurtmalarni olishda xatolik: ${response.body}');
+    }
   }
-
 
   String formatDate(String dateStr) {
     try {
@@ -80,8 +98,12 @@ class _ClientListPageState extends State<ClientListPage> {
         final screenWidth = MediaQuery.of(context).size.width;
 
         return Dialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 8), // almost full width
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 8,
+          ), // almost full width
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           child: Container(
             width: screenWidth,
             padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
@@ -94,7 +116,10 @@ class _ClientListPageState extends State<ClientListPage> {
                   children: [
                     const Text(
                       'Servislar',
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     IconButton(
                       icon: const Icon(Icons.close),
@@ -108,13 +133,37 @@ class _ClientListPageState extends State<ClientListPage> {
                 /// Table Header
                 Row(
                   children: const [
-                    Expanded(flex: 3, child: Text('Servis nomi', style: TextStyle(fontWeight: FontWeight.bold))),
+                    Expanded(
+                      flex: 3,
+                      child: Text(
+                        'Servis nomi',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
                     SizedBox(width: 8),
-                    Expanded(flex: 2, child: Text('Eni (m)', style: TextStyle(fontWeight: FontWeight.bold))),
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        'Eni (m)',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
                     SizedBox(width: 8),
-                    Expanded(flex: 2, child: Text('Bo\'yi (m)', style: TextStyle(fontWeight: FontWeight.bold))),
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        'Bo\'yi (m)',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
                     SizedBox(width: 8),
-                    Expanded(flex: 2, child: Text('Kv', style: TextStyle(fontWeight: FontWeight.bold))),
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        'Kv',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
                   ],
                 ),
 
@@ -132,8 +181,13 @@ class _ClientListPageState extends State<ClientListPage> {
                         keyboardType: TextInputType.number,
                         decoration: InputDecoration(
                           hintText: 'Eni',
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 12,
+                          ),
                           isDense: true,
                         ),
                       ),
@@ -146,8 +200,13 @@ class _ClientListPageState extends State<ClientListPage> {
                         keyboardType: TextInputType.number,
                         decoration: InputDecoration(
                           hintText: 'Boyi',
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 12,
+                          ),
                           isDense: true,
                         ),
                       ),
@@ -157,7 +216,9 @@ class _ClientListPageState extends State<ClientListPage> {
                       flex: 2,
                       child: ValueListenableBuilder<double>(
                         valueListenable: kvValue,
-                        builder: (context, value, child) => Text(value.toStringAsFixed(2)),
+                        builder:
+                            (context, value, child) =>
+                                Text(value.toStringAsFixed(2)),
                       ),
                     ),
                   ],
@@ -175,14 +236,71 @@ class _ClientListPageState extends State<ClientListPage> {
                     ),
                     const SizedBox(width: 12),
                     ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-                      onPressed: () {
-                        print('Eni: ${eniController.text}');
-                        print('Boyi: ${boyiController.text}');
-                        print('Kv: ${kvValue.value}');
-                        Navigator.of(context).pop();
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                      ),
+                      onPressed: () async {
+                        double eni = double.tryParse(eniController.text) ?? 0.0;
+                        double boyi = double.tryParse(boyiController.text) ?? 0.0;
+                        double kv = kvValue.value;
+                        double price = kv * 1000;
+                        int quantity = 3;
+                        double totalSum = price * quantity;
+
+                        final data = {
+                          'firstName': client.name.split(" ").first,
+                          'lastName': client.name.split(" ").length > 1
+                              ? client.name.split(" ").sublist(1).join(" ")
+                              : '',
+                          'phone': client.phoneNumber,
+                          'addressText': client.address,
+                          'totalSum': totalSum, // ✅ asosiy summa
+                          'services': [
+                            {
+                              'title': client.description,
+                              'width': eni,
+                              'height': boyi,
+                              'area': kv,
+                              'quantity': quantity,
+                              'pricePerSquareMeter': price,
+                              'totalSum': totalSum,
+                            },
+                          ],
+                          'deliveryDate': DateFormat("yyyy-MM-dd").format(DateTime.now()),
+                          'status': 'washed',
+                        };
+
+
+                        final response = await ApiService.updateOrder(
+                          client.id,
+                          data,
+                        );
+
+                        if (response.statusCode == 200) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('✅ Maʼlumotlar saqlandi'),
+                            ),
+                          );
+                          Navigator.of(context).pop();
+                          setState(() {
+                            _clientsFuture =
+                                _loadClientsFromApi(); // ro‘yxatni yangilash
+                          });
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                "❌ Xatolik: ${response.statusCode}",
+                              ),
+                            ),
+                          );
+                        }
                       },
-                      child: const Text('Saqlash', style: TextStyle(color: Colors.white)),
+                      child: const Text(
+                        'Saqlash',
+                        style: TextStyle(color: Colors.white),
+                      ),
                     ),
                   ],
                 ),
@@ -192,7 +310,6 @@ class _ClientListPageState extends State<ClientListPage> {
         );
       },
     );
-
   }
 
   void _calculateKv(
@@ -259,9 +376,10 @@ class _ClientListPageState extends State<ClientListPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildRow('Mijoz:', client.name),
+                      _buildRow('Tavsif:', client.description),
                       _buildRow('Telefon:', client.phoneNumber),
                       _buildRow('Manzil:', client.address),
-                      _buildRow('Tavsif:', client.description),
+                      _buildRow('Ummumiy summa:', client.totalSum.toString()),
                       const SizedBox(height: 12.0),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,

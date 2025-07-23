@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gilam/TTT.dart';
 
 import 'Adminlar.dart';
 import 'Buyurtma_yaratish.dart';
@@ -94,19 +95,19 @@ class AppDrawer extends StatelessWidget {
                   routeName: '/buyurtma-qabuli',
                 ),
                 buildMenuItem(
-                  icon: Icons.person_outline,
+                  icon: Icons.admin_panel_settings_outlined,
                   title: 'Adminlar',
                   page:  AdminScreen(),
                   routeName: '/adminlar',
                 ),
                 buildMenuItem(
-                  icon: Icons.settings_outlined,
+                  icon: Icons.miscellaneous_services_outlined,
                   title: 'Servislar',
                   page: const ServiceListScreen(),
                   routeName: '/servislar',
                 ),
                 buildMenuItem(
-                  icon: Icons.list_alt,
+                  icon: Icons.format_list_bulleted_outlined,
                   title: 'Yangi buyurtmalar',
                   page: const ClientListPage(),
                   routeName: '/yangi-buyurtmalar',
@@ -129,6 +130,12 @@ class AppDrawer extends StatelessWidget {
                   page:  SozlamalarPage(),
                   routeName: '/sozlamalar',
                 ),
+                buildMenuItem(
+                  icon: Icons.settings,
+                  title: 'Hammasi',
+                  page:  AllOrdersPage(),
+                  routeName: '/sozlamalar',
+                ),
               ],
             ),
           ),
@@ -143,7 +150,6 @@ class AppDrawer extends StatelessWidget {
               ),
               onTap: () {
                 Navigator.pop(context);
-                // Logout funksiyasini yozing
                 showDialog(
                   context: context,
                   builder: (context) => AlertDialog(

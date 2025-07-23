@@ -5,7 +5,7 @@ class Order {
   final String address;
   final String description;
   final String createdAt;
-  final int totalAmount;
+  final int totalSum;
   final String deliveryDate;
 
   Order({
@@ -15,13 +15,13 @@ class Order {
     required this.address,
     required this.description,
     required this.createdAt,
-    required this.totalAmount,
+    required this.totalSum,
     required this.deliveryDate,
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
     return Order(
-      id: json['id'] ?? '',
+      id: json['_id'] ?? json['id'] ?? '',
       fullName: '${json['firstName']} ${json['lastName']}',
       phone: json['phone'] ?? '',
       address: json['addressText'] ?? '',
@@ -29,7 +29,7 @@ class Order {
           ? json['services'][0]['title']
           : '',
       createdAt: json['createdAt'] ?? '',
-      totalAmount: int.tryParse(json['totalAmount'].toString()) ?? 0,
+      totalSum: int.tryParse(json['totalSum'].toString()) ?? 0,
       deliveryDate: json['deliveryDate'] ?? '',
     );
   }
